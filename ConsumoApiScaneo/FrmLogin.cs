@@ -150,7 +150,9 @@ namespace ConsumoApiScaneo
 
         private void cmdVerCofresUrnas_Click(object sender, EventArgs e)
         {
-            new FrmMostrarImg().Show();
+            FrmMostrarImg f = new FrmMostrarImg();
+            f.txtUsuario.Text = this.txtUsuario.Text;
+            f.ShowDialog();
         }
     }
 }

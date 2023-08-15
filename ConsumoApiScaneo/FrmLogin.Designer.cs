@@ -68,6 +68,7 @@
             txtUsuario.Name = "txtUsuario";
             txtUsuario.Size = new Size(135, 23);
             txtUsuario.TabIndex = 4;
+            txtUsuario.Text = "wmunoz";
             // 
             // txtPassword
             // 
@@ -76,6 +77,7 @@
             txtPassword.PasswordChar = '*';
             txtPassword.Size = new Size(135, 23);
             txtPassword.TabIndex = 5;
+            txtPassword.Text = "12345";
             // 
             // cmdLogin
             // 

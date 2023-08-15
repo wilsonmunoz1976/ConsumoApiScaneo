@@ -224,7 +224,6 @@ namespace ConsumoApiScaneo
         private OpenFileDialog openFileDialog1;
         private Button btnMostrarSala;
         private ListBox lstCofresUrnas;
-        private TextBox txtUsuario;
         private Label label2;
         private ComboBox cboEstado;
         private Label label1;
@@ -236,5 +235,6 @@ namespace ConsumoApiScaneo
         private Label label5;
         private Label lblID;
         private Label label6;
+        public TextBox txtUsuario;
     }
 }

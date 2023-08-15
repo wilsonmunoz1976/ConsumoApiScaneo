@@ -1,5 +1,7 @@
 ﻿using ConsumoApiScaneo.Estructuras;
+using GroupDocs.Conversion.Options.Convert;
 using Newtonsoft.Json;
+using SharpCompress.Common;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
@@ -10,6 +12,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using System.Windows.Forms;
+using Encoder = System.Drawing.Imaging.Encoder;
 
 namespace ConsumoApiScaneo
 {
@@ -20,26 +23,109 @@ namespace ConsumoApiScaneo
             InitializeComponent();
         }
 
+        private ImageFormat? GetImageFormat(byte[] byteArray)
+        {
 
+            const int INT_SIZE = 4; // We only need to check the first four bytes of the file / byte array.
+
+            var bmp = System.Text.Encoding.ASCII.GetBytes("BM");     // BMP
+            var gif = System.Text.Encoding.ASCII.GetBytes("GIF");    // GIF
+            var png = new byte[] { 137, 80, 78, 71 };                // PNG
+            var tiff = new byte[] { 73, 73, 42 };                    // TIFF
+            var tiff2 = new byte[] { 77, 77, 42 };                   // TIFF
+            var jpeg = new byte[] { 255, 216, 255, 224 };            // jpeg
+            var jpeg2 = new byte[] { 255, 216, 255, 225 };           // jpeg2 (canon)
+
+            // Copy the first 4 bytes into our buffer 
+            var buffer = new byte[INT_SIZE];
+            System.Buffer.BlockCopy(byteArray, 0, buffer, 0, INT_SIZE);
+
+            if (bmp.SequenceEqual(buffer.Take(bmp.Length)))
+                return ImageFormat.Bmp;
+
+            if (gif.SequenceEqual(buffer.Take(gif.Length)))
+                return ImageFormat.Gif;
+
+            if (png.SequenceEqual(buffer.Take(png.Length)))
+                return ImageFormat.Png;
+
+            if (tiff.SequenceEqual(buffer.Take(tiff.Length)))
+                return ImageFormat.Tiff;
+
+            if (tiff2.SequenceEqual(buffer.Take(tiff2.Length)))
+                return ImageFormat.Tiff;
+
+            if (jpeg.SequenceEqual(buffer.Take(jpeg.Length)))
+                return ImageFormat.Jpeg;
+
+            if (jpeg2.SequenceEqual(buffer.Take(jpeg2.Length)))
+                return ImageFormat.Jpeg;
+
+            return null;
+        }
 
         public Image Base64ToImage(string base64String)
         {
+            Cursor.Current = Cursors.WaitCursor;
             // Convert base 64 string to byte[]
             byte[] imageBytes = Convert.FromBase64String(base64String);
-            // Convert byte[] to Image
-            using (var ms = new MemoryStream(imageBytes, 0, imageBytes.Length))
+            Image image = null;
+            string sFilenameOrig = "";
+            string sFilenameJPG = "";
+
+            using (MemoryStream ms = new MemoryStream(imageBytes, 0, imageBytes.Length))
             {
-                Image image = Image.FromStream(ms, true);
-                return image;
+                if (GetImageFormat(imageBytes) != null)
+                {
+                    image = Image.FromStream(ms);
+                } else
+                {
+                    sFilenameOrig = Environment.CurrentDirectory + "\\" + DateTime.Now.ToString("yyyyMMddHHmmss") + ".webp";
+                    SaveBytesToFile(sFilenameOrig, imageBytes);
+
+                    using (GroupDocs.Conversion.Converter converter = new GroupDocs.Conversion.Converter(sFilenameOrig))
+                    {
+                        var convertOptions = converter.GetPossibleConversions()["jpg"].ConvertOptions;
+                        sFilenameJPG = sFilenameOrig.Replace(".webp", ".jpg");
+                        converter.Convert(sFilenameJPG, convertOptions);
+                    };
+                    imageBytes = File.ReadAllBytes(sFilenameJPG);
+                    using (MemoryStream msjpg = new MemoryStream(imageBytes, 0, imageBytes.Length))
+                    {
+                        image = Image.FromStream(msjpg);
+                    }
+                }
             }
+            if (sFilenameJPG != "") { File.Delete(sFilenameJPG); }
+            if (sFilenameOrig != "") { File.Delete(sFilenameOrig); }
+
+            Cursor.Current = Cursors.Default;
+            return image;
+
         }
 
+        private void SaveBytesToFile(string filename, byte[] bytesToWrite)
+        {
+            if (filename != null && filename.Length > 0 && bytesToWrite != null)
+            {
+                if (!Directory.Exists(Path.GetDirectoryName(filename)))
+                    Directory.CreateDirectory(Path.GetDirectoryName(filename));
 
+                FileStream file = File.Create(filename);
+
+                file.Write(bytesToWrite, 0, bytesToWrite.Length);
+
+                file.Close();
+            }
+        }
         private string ImageToBase64(Image image, System.Drawing.Imaging.ImageFormat format)
         {
             using (MemoryStream ms = new MemoryStream())
             {
                 // Convert Image to byte[]
+                var ep = new EncoderParameters(1);
+                ep.Param[0] = new EncoderParameter(Encoder.Quality, 80);
+
                 image.Save(ms, format);
                 byte[] imageBytes = ms.ToArray();
 
@@ -60,7 +146,7 @@ namespace ConsumoApiScaneo
                 string sEstado = cboEstado.SelectedItem.ToString().Trim();
                 string sUsuario = txtUsuario.Text.Trim();
 
-                var webRequest = new HttpRequestMessage(HttpMethod.Post, ConsumoApiScaneo.Properties.Settings.Default.URLWebApi + "/api/CofresUrnas/GetCofresUrnas/" + sBodega + "?estado=" + sEstado + (sUsuario == "" ? "" : "?usuario=" + sUsuario))
+                var webRequest = new HttpRequestMessage(HttpMethod.Post, ConsumoApiScaneo.Properties.Settings.Default.URLWebApi + "/api/CofresUrnas/GetCofresUrnas/" + sBodega + "?estado=" + sEstado + (sUsuario == "" ? "" : "&usuario=" + sUsuario))
                 {
                     Headers = { Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", Program.Token) }
                 };
@@ -148,9 +234,9 @@ namespace ConsumoApiScaneo
             using (var client = new HttpClient(clientHandler))
             {
 
-                var webRequest = new HttpRequestMessage(HttpMethod.Post, ConsumoApiScaneo.Properties.Settings.Default.URLWebApi + "/api/CofresUrnas/GetBodegas") 
+                var webRequest = new HttpRequestMessage(HttpMethod.Post, ConsumoApiScaneo.Properties.Settings.Default.URLWebApi + "/api/CofresUrnas/GetBodegas")
                 {
-                  Headers = { Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer" , Program.Token) }
+                    Headers = { Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", Program.Token) }
                 };
 
                 var response = client.Send(webRequest);
@@ -217,7 +303,7 @@ namespace ConsumoApiScaneo
 
                 using (var client = new HttpClient(clientHandler))
                 {
-                    
+
                     var webRequest = new HttpRequestMessage(HttpMethod.Post, ConsumoApiScaneo.Properties.Settings.Default.URLWebApi + "/api/CofresUrnas/GetSolEgreCofreUrna/" + sCodigo)
                     {
                         Headers = { Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", Program.Token) }
